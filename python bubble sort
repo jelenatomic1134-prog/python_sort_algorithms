@@ -1,0 +1,388 @@
+1) pravimo bazu i generisemo klase
+    new->other->persistance->entity classes from database
+2) ubacujemo dependencies u pom.xml
+    kopiraj ceo pom
+3) pravimo hibernate.cfg.xml
+    desni klik na projekat->xml document-> nazovemo ga hibernate.pom.xml-> ubacimo obavezno u src,main,resources
+4) pravimo DTO klasu
+    uproscena verzija entity klase
+    atributi,getteri i setteri, konstruktori, toString
+5) repository za glavnu klasu
+    interfejs
+    samo poziv save metode
+    public void saveStudent(Student student);
+6)pravljenje repository za druge klase
+    u njima radimo get by id 
+ public Smer getSmerById(Long id){
+        EntityManagerFactory emf= Persistence.createEntityManagerFactory("AppPU");
+        EntityManager em=emf.createEntityManager();
+        return em.find(Smer.class, id);
+    }
+7)implementacija repositorija
+    obavezno implements interfejs 
+    pre svake klase @Repository(value="")
+7.1)JDBC 
+private Connection connection;
+
+    @Autowired
+    public KnjigaJdbcRepository(Connection connection) {
+        this.connection = connection;
+    }
+    
+    @Override
+    public void save(Knjiga knjiga) {
+        String query = "INSERT INTO knjiga (naziv, godina, brojStrana, izdavac, kategorija) VALUES (?,?,?,?,?)";
+        PreparedStatement ps;
+        try {
+            ps = connection.prepareStatement(query);
+            ps.setString(1, knjiga.getNaziv());
+            ps.setInt(2, knjiga.getGodina());
+            ps.setInt(3, knjiga.getBrojStrana());
+            ps.setLong(4, knjiga.getIzdavac().getId());
+            ps.setLong(5, knjiga.getKategorija().getId());
+            ps.executeUpdate();
+        } catch (SQLException ex) {
+            Logger.getLogger(KnjigaJdbcRepository.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        
+    }
+
+7.2)JPA
+private final EntityManagerFactory emf;
+
+    @Autowired
+    public KnjigaJpaRepository(@Qualifier(value = "emf")EntityManagerFactory emf) {
+        this.emf = emf;
+    }
+
+    @Override
+    public void save(Knjiga knjiga) {
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        em.merge(knjiga);
+        em.getTransaction().commit();
+        em.close();
+    }
+7.3)Spring
+private final JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    public KnjigaSpringRepository(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Override
+    public void save(Knjiga knjiga) {
+        jdbcTemplate.update("INSERT INTO knjiga (naziv, godina, brojStrana, izdavac, kategorija) VALUES (?,?,?,?,?)", knjiga.getNaziv(), knjiga.getGodina(), knjiga.getBrojStrana(),knjiga.getIzdavac().getId(), knjiga.getKategorija().getId());
+    }
+7.4)Hibernate
+private SessionFactory sessionFactory;
+
+    @Autowired
+    public KnjigaHibernateRepository(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
+    }
+    
+    @Override
+    public void save(Knjiga knjiga) {
+        Session session = sessionFactory.openSession();
+        Transaction tr = session.beginTransaction();
+        session.merge(knjiga);
+        tr.commit();
+    }
+
+8)Service klasa
+public final StudentRepository studentRepository;
+    @Autowired
+    public StudentService(StudentRepository studentRepository) {
+      this.studentRepository=studentRepository;
+    }
+    SmerRepository s=new SmerRepository();
+    StatusRepository sr=new StatusRepository();
+    
+    public void save(StudentDto studentDto){
+        studentRepository.saveStudent(new Student(studentDto.getStudentPK(), studentDto.getImePrezime(),s.getSmerById(studentDto.getSmerId()), sr.getStatusById(studentDto.getStatusId())));
+        
+    }
+9)Config klasa
+iznad naziva klase @ComponentScan(basePackages = ("naziv projekta"))
+
+@Bean
+    public SessionFactory getSessionFactory(){
+        return new Configuration().configure("hibernate.cfg.xml").buildSessionFactory();            //hibernate
+    }
+    
+    @Bean(value = "hibernate-service")
+    public KnjigaService createKnjigaHibernateService(@Qualifier(value = "knjiga-hibernate-repository")KnjigaRepository knjigaRepository){         //hibernate
+        return new KnjigaService(knjigaRepository);
+    }
+    
+    @Bean
+    public Connection getConnection() throws SQLException{                             //jdbc
+        return DriverManager.getConnection("jdbc:mysql://localhost:3306/baza2", "root", "");
+    }
+    
+    @Bean(value = "jdbc-service")
+    public KnjigaService createHibernateService(@Qualifier(value = "knjiga-jdbc-repository")KnjigaRepository knjigaRepository){            //jdbc
+        return new KnjigaService(knjigaRepository);
+    }
+    
+    @Bean(value = "emf")
+    public EntityManagerFactory getEntityManagerFactory(){
+        return Persistence.createEntityManagerFactory("App2PU");                     //jpa
+    }
+    
+    @Bean(value = "jpa-service")
+    public KnjigaService createJpaRepository(@Qualifier(value = "jpa-repository")KnjigaRepository knjigaRepository){         //jpa
+        return new KnjigaService(knjigaRepository);
+    }
+    
+    @Bean
+    public DataSource getDataSource(){
+        return new DriverManagerDataSource("jdbc:mysql://localhost:3306/baza2", "root", "");            //spring
+    }
+    
+    @Bean
+    public JdbcTemplate getJdbcTemplate(DataSource ds){
+        return new JdbcTemplate(ds);                                //spring
+    }
+    
+    @Bean(value = "spring-service")
+    public KnjigaService createSpringService(@Qualifier(value = "spring-repository") KnjigaRepository knjigaRepository){            //spring
+        return new KnjigaService(knjigaRepository);
+    }
+
+10)main klasa
+iznad naziva klase @Component
+private final KnjigaService knjigaHibernateService;
+    private final KnjigaService knjigaJdbcService;
+    private final KnjigaService knjigaJpaService;
+    private final KnjigaService knjigaSpringService;
+
+    @Autowired
+    public App2(@Qualifier(value = "hibernate-service")KnjigaService knjigaHibernateService,
+            @Qualifier(value = "jdbc-service") KnjigaService knjigaJdbcService,
+            @Qualifier(value = "jpa-service") KnjigaService knjigaJpaService,
+            @Qualifier(value = "spring-service") KnjigaService knjigaSpringService) {
+        this.knjigaHibernateService = knjigaHibernateService;
+        this.knjigaJdbcService = knjigaJdbcService;
+        this.knjigaJpaService = knjigaJpaService;
+        this.knjigaSpringService = knjigaSpringService;
+    }
+
+public static void main(String[] args) {
+        System.out.println("Hello World!");
+        int broj;
+        Scanner sc = new Scanner(System.in);
+        
+        ApplicationContext conteiner=new AnnotationConfigApplicationContext(App1Config.class);
+        App1 app1;
+        app1=conteiner.getBean(App1.class);
+        
+        do {        
+            System.out.println("unesite broj");
+            broj=sc.nextInt();
+            
+            switch (broj) {
+                case 1:
+                   StudentDto s=new StudentDto();
+                   System.out.println("unesite broj indeksa");
+                   Long brind=sc.nextLong();
+                   
+                   System.out.println("unesite godinu upisa");
+                  Long godupisa=sc.nextLong();
+                  
+                  StudentPK pk= new StudentPK(brind, godupisa);
+                  s.setStudentPK(pk);
+                  sc.nextLine();
+                    System.out.println("unesite ime i prezime");
+                    s.setImePrezime(sc.nextLine());
+                    
+                    System.out.println("unesite sifu statusa");
+                    s.setStatusId(sc.nextLong());
+                    
+                    System.out.println("unesite sifru smera");
+                    s.setSmerId(sc.nextLong());
+               
+                    app1.save(s);
+                    
+                    break;
+                    
+                case 2:
+                   StudentDto s1=new StudentDto();
+                   System.out.println("unesite broj indeksa");
+                   Long brind1=sc.nextLong();
+                   
+                   System.out.println("unesite godinu upisa");
+                   Long godupisa1=sc.nextLong();
+                  
+                   StudentPK pk1= new StudentPK(brind1, godupisa1);
+                   s1.setStudentPK(pk1);
+                   sc.nextLine();
+                   System.out.println("unesite ime i prezime");
+                   s1.setImePrezime(sc.nextLine());
+                    
+                   System.out.println("unesite sifu statusa");
+                   s1.setStatusId(sc.nextLong());
+                    
+                   System.out.println("unesite sifru smera");
+                   s1.setSmerId(sc.nextLong());
+               
+                   app1.saveJPA(s1);
+                    break;
+                case 3:
+                    StudentDto s2=new StudentDto();
+                   System.out.println("unesite broj indeksa");
+                   Long brind2=sc.nextLong();
+                   
+                   System.out.println("unesite godinu upisa");
+                   Long godupisa2=sc.nextLong();
+                  
+                   StudentPK pk2= new StudentPK(brind2, godupisa2);
+                   s2.setStudentPK(pk2);
+                   sc.nextLine();
+                   System.out.println("unesite ime i prezime");
+                   s2.setImePrezime(sc.nextLine());
+                    
+                   System.out.println("unesite sifu statusa");
+                   s2.setStatusId(sc.nextLong());
+                    
+                   System.out.println("unesite sifru smera");
+                   s2.setSmerId(sc.nextLong());
+               
+                   app1.saveSpring(s2);
+                   break;
+                case 4:
+                       StudentDto s3=new StudentDto();
+                   System.out.println("unesite broj indeksa");
+                   Long brind3=sc.nextLong();
+                   
+                   System.out.println("unesite godinu upisa");
+                   Long godupisa3=sc.nextLong();
+                  
+                   StudentPK pk3= new StudentPK(brind3, godupisa3);
+                   s3.setStudentPK(pk3);
+                   sc.nextLine();
+                   System.out.println("unesite ime i prezime");
+                   s3.setImePrezime(sc.nextLine());
+                    
+                   System.out.println("unesite sifu statusa");
+                   s3.setStatusId(sc.nextLong());
+                    
+                   System.out.println("unesite sifru smera");
+                   s3.setSmerId(sc.nextLong());
+               
+                   app1.saveHibernate(s3);
+                    break;
+                  
+                default:
+                    return;
+            }
+            
+        } while (broj!=0);
+    }
+   public void save(StudentDto studentDto){
+       studentJdbcService.save(studentDto);
+   } 
+   
+   public void saveJPA(StudentDto studentDto){
+       studentJpaService.save(studentDto);
+   } 
+   
+      public void saveSpring(StudentDto studentDto){
+       studentSpringService.save(studentDto);
+   }
+        public void saveHibernate(StudentDto studentDto){
+       studentHibernateService.save(studentDto);
+   }
+}
+
+
+
+POM!!
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>app2</groupId>
+    <artifactId>App2</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>17</maven.compiler.release>
+        <exec.mainClass>app2.App2</exec.mainClass>
+    </properties>
+    
+    <dependencies>
+        <!-- Source: https://mvnrepository.com/artifact/org.springframework/spring-context -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>7.0.7</version>
+            <scope>compile</scope>
+        </dependency>
+        
+        <!-- Source: https://mvnrepository.com/artifact/com.mysql/mysql-connector-j -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>9.7.0</version>
+            <scope>compile</scope>
+        </dependency>
+        
+        <!-- Source: https://mvnrepository.com/artifact/org.springframework/spring-jdbc -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+            <version>7.0.7</version>
+            <scope>compile</scope>
+        </dependency>
+              
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <version>6.5.2.Final</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.eclipse.persistence</groupId>
+            <artifactId>org.eclipse.persistence.jpa</artifactId>
+            <version>4.0.2</version>
+        </dependency>
+    </dependencies>
+    
+</project>
+
+HIBERNATE.CFG.XML!!
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/XML/XMLDocument.xml to edit this template
+-->
+
+<hibernate-configuration>
+    <session-factory>
+
+        <!-- Database Connection -->
+        <property name="hibernate.dialect">org.hibernate.dialect.MySQL8Dialect</property>
+        <property name="hibernate.connection.url">jdbc:mysql://localhost:3306/IME_BAZE</property>
+        <property name="hibernate.connection.username">root</property>
+        <property name="hibernate.connection.password"></property>
+        <property name="hibernate.connection.driver_class">com.mysql.cj.jdbc.Driver</property>
+
+        <!-- Hibernate Settings -->
+        <property name="hibernate.show_sql">true</property>
+        <property name="hibernate.format_sql">true</property>
+
+        <!-- Mapping Entity -->
+        <mapping class="PUTANJA_DO_ENTITY_KLASE.KLASA"/>
+        <mapping class="app2.domain.Kategorija"/>PROMENI
+    </session-factory>
+</hibernate-configuration>
