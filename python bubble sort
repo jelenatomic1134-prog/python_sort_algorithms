@@ -386,3 +386,44 @@ Click nbfs://nbhost/SystemFileSystem/Templates/XML/XMLDocument.xml to edit this 
         <mapping class="app2.domain.Kategorija"/>PROMENI
     </session-factory>
 </hibernate-configuration>
+
+BLOB PRIMER
+public void blobPrimer(){
+        try {
+            PreparedStatement statement=connection.prepareStatement("INSERT INTO Proizvod (IDPROIZVOD, NAZIV, CENA, SLIKA) VALUES (?, ?, ?, ?)");
+            
+            statement.setInt(1, 34568);
+            statement.setString(2, "Neki treci naziv");
+            statement.setBigDecimal(3, new BigDecimal(100));
+            statement.setBlob(4, new FileInputStream("inFiles/slika.jpg"));
+            
+            statement.executeUpdate();
+            
+//            ResultSet rs=statement.getGeneratedKeys();
+//            int id=0;
+//            while(rs.next()) {
+//                id=rs.getInt(1);
+//            }
+            //rs.close();
+            statement.close();
+            connection.commit();
+            statement=connection.prepareStatement("SELECT IDPROIZVOD, NAZIV, CENA, SLIKA FROM Proizvod WHERE IDPROIZVOD=?");
+            statement.setInt(1, 34567);
+            ResultSet rs=statement.executeQuery();
+            while (rs.next()) {
+                System.out.println("ID: "+rs.getInt("IDPROIZVOD"));
+                System.out.println("NAZIV: "+rs.getString("NAZIV"));
+                System.out.println("CENA: "+rs.getBigDecimal("CENA"));
+                Blob blob=rs.getBlob("SLIKA");
+                FileOutputStream outSlika=new FileOutputStream("outFiles/procitanaSlika.jpg");
+                
+                outSlika.write(blob.getBytes(1, (int)blob.length()));
+                outSlika.close();
+            }   } catch (FileNotFoundException ex) {
+            Logger.getLogger(DatabaseBroker.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException ex) {
+            Logger.getLogger(DatabaseBroker.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
+            Logger.getLogger(DatabaseBroker.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
