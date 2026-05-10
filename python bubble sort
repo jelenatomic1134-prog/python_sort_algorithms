@@ -431,3 +431,27 @@ public void blobPrimer(){
         }
     }
 OBRISI OVO KAD ZAVRSIS RETARDE
+RESULT SET!!!
+ public class StatusRepository {
+    public Status getStatusById(Long id){
+        String query = "SELECT * FROM status WHERE id = ?";
+        Connection connection;
+        try {
+            connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/baza1", "root", "");
+            PreparedStatement ps = connection.prepareStatement(query);
+            ps.setLong(1, id);
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            Status status = new Status();
+            status.setId(rs.getLong("id"));
+            status.setStatusSrp("statusSrp");
+            status.setStatusEng("statusEng");
+            return status;
+        } catch (SQLException ex) {
+            Logger.getLogger(StatusRepository.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
+    }
+}
+
+OBRISI OVO KAD ZAVRSIS RETARDE
