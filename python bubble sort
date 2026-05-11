@@ -485,4 +485,29 @@ RESULT SET!!!
     }
 }
 
+
+GET LISTU OBJEKATA
+public List<CerkaDto> getCerkeById(Integer id){
+        String query = "SELECT * FROM cerka WHERE mama=?";
+        
+        List<CerkaDto> cerke = new ArrayList<>();
+        try {
+            Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/b", "root", "");
+            PreparedStatement ps = connection.prepareStatement(query);
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                CerkaDto c = new CerkaDto();
+                c.setJmbg(rs.getInt("jmbg"));
+                c.setIme(rs.getString("ime"));
+                c.setPrezime(rs.getString("prezime"));
+                c.setMamaJmbg(id);
+                cerke.add(c);
+            }
+        } catch (SQLException ex) {
+            Logger.getLogger(MamaRepository.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return cerke;
+    }
+
 OBRISI OVO KAD ZAVRSIS RETARDE
